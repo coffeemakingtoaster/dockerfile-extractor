@@ -39,7 +39,7 @@ func (r *RankingRetriever) Scrape() {
 		if !strings.Contains(content, "/") {
 			return
 		}
-		links = append(links, fmt.Sprintf("github.com/%s", content))
+		links = append(links, content)
 	})
 	c.Limit(&colly.LimitRule{
 		Parallelism: 1,

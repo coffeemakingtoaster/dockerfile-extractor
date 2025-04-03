@@ -4,10 +4,11 @@ import (
 	"database/sql"
 
 	_ "github.com/mattn/go-sqlite3"
+	"github.com/rs/zerolog/log"
 )
 
 func AddToDB(db *sql.DB, hash, url string) error {
-	stmt, err := db.Prepare("INSERT INTO retrieved_repositories(hash, url) VALUES(?, ?)")
+	stmt, err := db.Prepare("INSERT INTO retrieved_repositories(hash, repo) VALUES(?, ?)")
 	if err != nil {
 		return err
 	}
@@ -56,5 +57,13 @@ func GetPresentHashCount() (int, error) {
 	}
 
 	return presentItems, nil
+}
 
+func GetRepoIterator() *sql.Rows {
+	db := RetrieveDbConn()
+	rows, err := db.Query("select hash, repo from retrieved_repositories")
+	if err != nil {
+		log.Error().Msg(err.Error())
+	}
+	return rows
 }
