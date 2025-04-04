@@ -24,7 +24,7 @@ func NewRankingRetriever() RankingRetriever {
 }
 
 func (r *RankingRetriever) Scrape() {
-	currentCount, _ := db.GetPresentHashCount()
+	currentCount, _, _ := db.GetPresentHashCount()
 	log.Info().Msgf("Already have %d in db!", currentCount)
 
 	if currentCount > 0 {

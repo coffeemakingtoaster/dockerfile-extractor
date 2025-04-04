@@ -39,29 +39,44 @@ func CheckIfAlreadyPresent(hash string) (bool, error) {
 	return hash == retrievedHash, nil
 }
 
-func GetPresentHashCount() (int, error) {
+func GetPresentHashCount() (int, int, error) {
 	db := RetrieveDbConn()
 
 	defer db.Close()
 
-	stmt, err := db.Prepare("SELECT count(*) FROM retrieved_repositories")
+	stmt, err := db.Prepare("SELECT count(*), sum(scraped) FROM retrieved_repositories")
 	if err != nil {
-		return 0, err
+		return 0, 0, err
 	}
 	defer stmt.Close()
 
-	var presentItems int
-	err = stmt.QueryRow().Scan(&presentItems)
+	var presentItemsTotal int
+	var presentItemsDone int
+	err = stmt.QueryRow().Scan(&presentItemsTotal, &presentItemsDone)
 	if err != nil {
-		return 0, err
+		return 0, 0, err
 	}
 
-	return presentItems, nil
+	return presentItemsTotal, presentItemsDone, nil
+}
+
+func SetScrapedByHash(hash string) error {
+	db := RetrieveDbConn()
+	defer db.Close()
+	stmt, err := db.Prepare("UPDATE retrieved_repositories SET scraped = 1 WHERE hash = ?")
+
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
+	_, err = stmt.Exec(hash)
+	return err
 }
 
 func GetRepoIterator() *sql.Rows {
 	db := RetrieveDbConn()
-	rows, err := db.Query("select hash, repo from retrieved_repositories")
+	rows, err := db.Query("select hash, repo from retrieved_repositories WHERE scraped=0")
 	if err != nil {
 		log.Error().Msg(err.Error())
 	}

@@ -11,6 +11,9 @@ import (
 const targetPath = "./contents"
 
 func ScrapeAllDBContents() {
+	currentCount, doneCount, _ := db.GetPresentHashCount()
+	log.Info().Msgf("%d items in DB (%d done, %d todo)", currentCount, doneCount, currentCount-doneCount)
+
 	rowIterator := db.GetRepoIterator()
 	defer rowIterator.Close()
 	scraped_count := 0
@@ -28,6 +31,7 @@ func ScrapeAllDBContents() {
 		saveAllDockerfilesToDisk(dockerfiles)
 		scraped_count += len(dockerfiles)
 		log.Info().Msgf("Scraped %d files (%d rows)", scraped_count, rowcount)
+		db.SetScrapedByHash(hash)
 	}
 	log.Info().Msgf("Scraping took %v.", time.Now().Sub(startTime))
 }

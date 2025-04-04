@@ -137,5 +137,8 @@ func getFileURL(info DockerFileInformation) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	if tree.DownloadURL == nil {
+		return "", errors.New("Download url was nil Pointer")
+	}
 	return *tree.DownloadURL, nil
 }
