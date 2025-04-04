@@ -1,12 +1,12 @@
 package reporetriever
 
 import (
-	"crypto/sha256"
 	"fmt"
 	"strings"
 	"time"
 
 	"github.com/coffeemakingtoaster/dockerfile-extractor/pkg/db"
+	"github.com/coffeemakingtoaster/dockerfile-extractor/pkg/util"
 	"github.com/gocolly/colly/v2"
 	"github.com/rs/zerolog/log"
 )
@@ -63,10 +63,7 @@ func (r *RankingRetriever) Scrape() {
 	defer conn.Close()
 
 	for _, link := range links {
-		h := sha256.New()
-		h.Write([]byte(link))
-		hash := h.Sum(nil)
-		err := db.AddToDB(conn, string(hash), link)
+		err := db.AddToDB(conn, util.HashString(link), link)
 		if err != nil {
 			log.Error().Msgf("Could not write to db: %s", err.Error())
 			continue
