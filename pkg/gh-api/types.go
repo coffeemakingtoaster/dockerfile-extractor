@@ -49,3 +49,7 @@ type Links struct {
 	HTML *string `json:"html"`
 	Self string  `json:"self"`
 }
+
+type RepoInfo struct {
+	DefaultBranch string `json:"default_branch"`
+}

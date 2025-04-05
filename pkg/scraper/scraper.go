@@ -14,13 +14,37 @@ func ScrapeAllDBContents() {
 	currentCount, doneCount, _ := db.GetPresentHashCount()
 	log.Info().Msgf("%d items in DB (%d done, %d todo)", currentCount, doneCount, currentCount-doneCount)
 
-	rowIterator := db.GetRepoIterator()
+	blockSize := 10
+	totalScrapedDockerfiles := 0
+	totalScrapedRepositories := 0
+	startTime := time.Now()
+
+	lastIterRows := 100
+	for lastIterRows >= blockSize {
+		scraped_count, lastIterRows := scrapeBlock(blockSize)
+		totalScrapedDockerfiles += scraped_count
+		totalScrapedRepositories += lastIterRows
+		log.Info().Msgf("Found %d dockerfiles (%d repos)", totalScrapedDockerfiles, totalScrapedRepositories)
+	}
+	log.Info().Msgf("Scraping took %v.", time.Now().Sub(startTime))
+}
+
+func scrapeBlock(blockSize int) (int, int) {
+	conn := db.RetrieveDbConn()
+
+	tx, err := conn.Begin()
+
+	if err != nil {
+		panic(err)
+	}
+
+	rowIterator := db.GetRepoIterator(tx)
+	defer conn.Close()
 	defer rowIterator.Close()
 	scraped_count := 0
-	rowcount := 0
-	startTime := time.Now()
-	for rowIterator.Next() {
-		rowcount++
+	rowCount := 0
+	for rowIterator.Next() && rowCount <= blockSize {
+		rowCount++
 		var repo string
 		var hash string
 		err := rowIterator.Scan(&hash, &repo)
@@ -30,10 +54,13 @@ func ScrapeAllDBContents() {
 		dockerfiles := ghapi.GetDockerfilesFrom(repo)
 		saveAllDockerfilesToDisk(dockerfiles)
 		scraped_count += len(dockerfiles)
-		log.Info().Msgf("Scraped %d files (%d rows)", scraped_count, rowcount)
-		db.SetScrapedByHash(hash)
+		err = db.SetScrapedByHash(tx, hash)
+		if err != nil {
+			log.Warn().Msgf("Could not update status due to an error %s", err.Error())
+		}
 	}
-	log.Info().Msgf("Scraping took %v.", time.Now().Sub(startTime))
+	tx.Commit()
+	return scraped_count, rowCount
 }
 
 func saveAllDockerfilesToDisk(dockerfiles []ghapi.DockerFileInformation) {

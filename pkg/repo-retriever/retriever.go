@@ -36,7 +36,7 @@ func (r *RankingRetriever) Scrape() {
 	c.OnHTML(".hidden-xs.hidden-sm", func(e *colly.HTMLElement) {
 		content := e.Text
 		content = strings.ReplaceAll(content, "\n", "")
-		if !strings.Contains(content, "/") {
+		if !strings.Contains(content, "/") || strings.HasSuffix(content, "...") {
 			return
 		}
 		links = append(links, content)

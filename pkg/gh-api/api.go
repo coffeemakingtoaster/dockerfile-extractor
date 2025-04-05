@@ -42,8 +42,15 @@ func doRequest(url string) (*http.Response, error) {
 
 	res, err := client.Do(req)
 
+	if res.StatusCode != 200 {
+		log.Error().Msg(url)
+		//bdy, _ := io.ReadAll(res.Body)
+		//panic(fmt.Sprintf("Did not get expected status code %d: %s", res.StatusCode, string(bdy)))
+		return nil, err
+	}
+
 	// rate limiting?
-	time.Sleep(800 * time.Microsecond)
+	time.Sleep(1)
 
 	return res, err
 }
@@ -87,8 +94,27 @@ func (dfi DockerFileInformation) SaveToFile(targetPath string) error {
 }
 
 func GetDockerfilesFrom(repo string) []DockerFileInformation {
-	tree := getFileTreeContent(repo, "main")
+	defaultBranch := getRepositoryDefaultBranch(repo)
+	tree := getFileTreeContent(repo, defaultBranch)
 	return getDockerfilesInTree(repo, tree)
+}
+
+func getRepositoryDefaultBranch(repo string) string {
+	res, err := doRequest(fmt.Sprintf("%s/repos/%s", BASE_URL, repo))
+	if err != nil {
+		panic(err)
+	}
+	resBody, err := io.ReadAll(res.Body)
+	if err != nil {
+		panic(err)
+	}
+	var info RepoInfo
+	err = json.Unmarshal([]byte(resBody), &info)
+	if err != nil {
+		panic(err)
+	}
+	return info.DefaultBranch
+
 }
 
 func getFileTreeContent(repo, branch string) GitTree {
@@ -112,7 +138,6 @@ func getDockerfilesInTree(repo string, tree GitTree) []DockerFileInformation {
 	res := []DockerFileInformation{}
 	for _, item := range tree.Tree {
 		if strings.Contains(item.Path, "Dockerfile") {
-			log.Debug().Msgf("Found: %s", item.Path)
 			res = append(res,
 				DockerFileInformation{
 					Repo: repo,

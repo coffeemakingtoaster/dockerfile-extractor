@@ -60,10 +60,8 @@ func GetPresentHashCount() (int, int, error) {
 	return presentItemsTotal, presentItemsDone, nil
 }
 
-func SetScrapedByHash(hash string) error {
-	db := RetrieveDbConn()
-	defer db.Close()
-	stmt, err := db.Prepare("UPDATE retrieved_repositories SET scraped = 1 WHERE hash = ?")
+func SetScrapedByHash(tx *sql.Tx, hash string) error {
+	stmt, err := tx.Prepare("UPDATE retrieved_repositories SET scraped=1 WHERE hash=?")
 
 	if err != nil {
 		return err
@@ -74,9 +72,8 @@ func SetScrapedByHash(hash string) error {
 	return err
 }
 
-func GetRepoIterator() *sql.Rows {
-	db := RetrieveDbConn()
-	rows, err := db.Query("select hash, repo from retrieved_repositories WHERE scraped=0")
+func GetRepoIterator(tx *sql.Tx) *sql.Rows {
+	rows, err := tx.Query("select hash, repo from retrieved_repositories WHERE scraped=0")
 	if err != nil {
 		log.Error().Msg(err.Error())
 	}
