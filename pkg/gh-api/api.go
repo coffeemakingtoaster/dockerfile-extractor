@@ -42,15 +42,13 @@ func doRequest(url string) (*http.Response, error) {
 
 	res, err := client.Do(req)
 
-	if res.StatusCode != 200 {
-		log.Error().Msg(url)
-		//bdy, _ := io.ReadAll(res.Body)
-		//panic(fmt.Sprintf("Did not get expected status code %d: %s", res.StatusCode, string(bdy)))
-		return nil, err
-	}
-
 	// rate limiting?
 	time.Sleep(1)
+
+	if res.StatusCode != 200 {
+		log.Error().Msg(url)
+		return nil, err
+	}
 
 	return res, err
 }
@@ -94,15 +92,19 @@ func (dfi DockerFileInformation) SaveToFile(targetPath string) error {
 }
 
 func GetDockerfilesFrom(repo string) []DockerFileInformation {
-	defaultBranch := getRepositoryDefaultBranch(repo)
+	defaultBranch, err := getRepositoryDefaultBranch(repo)
+	if err != nil {
+		log.Error().Msgf("Something went wrong with request: %s", err.Error())
+		return []DockerFileInformation{}
+	}
 	tree := getFileTreeContent(repo, defaultBranch)
 	return getDockerfilesInTree(repo, tree)
 }
 
-func getRepositoryDefaultBranch(repo string) string {
+func getRepositoryDefaultBranch(repo string) (string, error) {
 	res, err := doRequest(fmt.Sprintf("%s/repos/%s", BASE_URL, repo))
-	if err != nil {
-		panic(err)
+	if err != nil || res == nil {
+		return "", err
 	}
 	resBody, err := io.ReadAll(res.Body)
 	if err != nil {
@@ -113,13 +115,13 @@ func getRepositoryDefaultBranch(repo string) string {
 	if err != nil {
 		panic(err)
 	}
-	return info.DefaultBranch
+	return info.DefaultBranch, nil
 
 }
 
 func getFileTreeContent(repo, branch string) GitTree {
 	res, err := doRequest(fmt.Sprintf("%s/repos/%s/git/trees/%s?recursive=1", BASE_URL, repo, branch))
-	if err != nil {
+	if err != nil || res == nil {
 		panic(err)
 	}
 	resBody, err := io.ReadAll(res.Body)
@@ -150,7 +152,7 @@ func getDockerfilesInTree(repo string, tree GitTree) []DockerFileInformation {
 
 func getFileURL(info DockerFileInformation) (string, error) {
 	res, err := doRequest(fmt.Sprintf("%s/repos/%s/contents/%s", BASE_URL, info.Repo, info.Path))
-	if err != nil {
+	if err != nil || res == nil {
 		return "", err
 	}
 	resBody, err := io.ReadAll(res.Body)
@@ -166,4 +168,45 @@ func getFileURL(info DockerFileInformation) (string, error) {
 		return "", errors.New("Download url was nil Pointer")
 	}
 	return *tree.DownloadURL, nil
+}
+
+func GetRepositoryContributers(repo string) []ContributerInfo {
+	res, err := doRequest(fmt.Sprintf("%s/repos/%s/contributors", BASE_URL, repo))
+	if err != nil || res == nil {
+		return []ContributerInfo{}
+	}
+	resBody, err := io.ReadAll(res.Body)
+	if err != nil {
+		return []ContributerInfo{}
+	}
+	var contributers []ContributerInfo
+	err = json.Unmarshal([]byte(resBody), &contributers)
+	if err != nil {
+		return []ContributerInfo{}
+	}
+	return contributers
+}
+
+func GetUserRepositories(userId string) []string {
+	repositoryNames := []string{}
+	res, err := doRequest(fmt.Sprintf("%s/users/%s/repos", BASE_URL, userId))
+	if err != nil || res == nil {
+		return repositoryNames
+	}
+	resBody, err := io.ReadAll(res.Body)
+	if err != nil {
+		return repositoryNames
+	}
+	var repoList []RepositoryOverviewInfo
+	err = json.Unmarshal([]byte(resBody), &repoList)
+	if err != nil {
+		return repositoryNames
+	}
+
+	for _, repo := range repoList {
+		repositoryNames = append(repositoryNames, repo.Name)
+	}
+
+	return repositoryNames
+
 }

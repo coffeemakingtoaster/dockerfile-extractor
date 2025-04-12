@@ -53,3 +53,12 @@ type Links struct {
 type RepoInfo struct {
 	DefaultBranch string `json:"default_branch"`
 }
+
+type ContributerInfo struct {
+	Id   string `json:"id"`
+	Name string `json:"login"`
+}
+
+type RepositoryOverviewInfo struct {
+	Name string `json:"full_name"`
+}
