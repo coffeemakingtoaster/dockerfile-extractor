@@ -23,15 +23,25 @@ type DockerFileInformation struct {
 	Content string
 }
 
+type Decoder interface {
+	RepoInfo | GitTree | []RepositoryOverviewInfo | []ContributerInfo | ContentTree
+}
+
 func CanUseAuth() bool {
 	return os.Getenv("GH_TOKEN") != ""
 }
 
-func doRequest(url string) (*http.Response, error) {
+func doRequest[T Decoder](url string) (T, error) {
+	var result T
 	client := http.Client{}
 	req, err := http.NewRequest("GET", url, nil)
+
+	// rate limiting?
+	time.Sleep(1)
+
 	if err != nil {
-		return nil, err
+		log.Error().Msg(err.Error())
+		return result, err
 	}
 
 	if CanUseAuth() {
@@ -42,15 +52,25 @@ func doRequest(url string) (*http.Response, error) {
 
 	res, err := client.Do(req)
 
-	// rate limiting?
-	time.Sleep(1)
-
 	if res.StatusCode != 200 {
-		log.Error().Msg(url)
-		return nil, err
+		log.Error().Msgf("Expected 200 as response code, got %d", res.StatusCode)
+		return result, errors.New("Unexpected response code")
 	}
 
-	return res, err
+	resBody, err := io.ReadAll(res.Body)
+
+	if err != nil {
+		log.Error().Msg(err.Error())
+		return result, err
+	}
+
+	err = json.Unmarshal([]byte(resBody), &result)
+	if err != nil {
+		log.Error().Msg(err.Error())
+		return result, err
+	}
+
+	return result, err
 }
 
 func (dfi *DockerFileInformation) PopulateContent() error {
@@ -102,34 +122,16 @@ func GetDockerfilesFrom(repo string) []DockerFileInformation {
 }
 
 func getRepositoryDefaultBranch(repo string) (string, error) {
-	res, err := doRequest(fmt.Sprintf("%s/repos/%s", BASE_URL, repo))
-	if err != nil || res == nil {
+	info, err := doRequest[RepoInfo](fmt.Sprintf("%s/repos/%s", BASE_URL, repo))
+	if err != nil {
 		return "", err
-	}
-	resBody, err := io.ReadAll(res.Body)
-	if err != nil {
-		panic(err)
-	}
-	var info RepoInfo
-	err = json.Unmarshal([]byte(resBody), &info)
-	if err != nil {
-		panic(err)
 	}
 	return info.DefaultBranch, nil
 
 }
 
 func getFileTreeContent(repo, branch string) GitTree {
-	res, err := doRequest(fmt.Sprintf("%s/repos/%s/git/trees/%s?recursive=1", BASE_URL, repo, branch))
-	if err != nil || res == nil {
-		panic(err)
-	}
-	resBody, err := io.ReadAll(res.Body)
-	if err != nil {
-		panic(err)
-	}
-	var tree GitTree
-	err = json.Unmarshal([]byte(resBody), &tree)
+	tree, err := doRequest[GitTree](fmt.Sprintf("%s/repos/%s/git/trees/%s?recursive=1", BASE_URL, repo, branch))
 	if err != nil {
 		panic(err)
 	}
@@ -151,16 +153,7 @@ func getDockerfilesInTree(repo string, tree GitTree) []DockerFileInformation {
 }
 
 func getFileURL(info DockerFileInformation) (string, error) {
-	res, err := doRequest(fmt.Sprintf("%s/repos/%s/contents/%s", BASE_URL, info.Repo, info.Path))
-	if err != nil || res == nil {
-		return "", err
-	}
-	resBody, err := io.ReadAll(res.Body)
-	if err != nil {
-		return "", err
-	}
-	var tree ContentTree
-	err = json.Unmarshal([]byte(resBody), &tree)
+	tree, err := doRequest[ContentTree](fmt.Sprintf("%s/repos/%s/contents/%s", BASE_URL, info.Repo, info.Path))
 	if err != nil {
 		return "", err
 	}
@@ -171,16 +164,7 @@ func getFileURL(info DockerFileInformation) (string, error) {
 }
 
 func GetRepositoryContributers(repo string) []ContributerInfo {
-	res, err := doRequest(fmt.Sprintf("%s/repos/%s/contributors", BASE_URL, repo))
-	if err != nil || res == nil {
-		return []ContributerInfo{}
-	}
-	resBody, err := io.ReadAll(res.Body)
-	if err != nil {
-		return []ContributerInfo{}
-	}
-	var contributers []ContributerInfo
-	err = json.Unmarshal([]byte(resBody), &contributers)
+	contributers, err := doRequest[[]ContributerInfo](fmt.Sprintf("%s/repos/%s/contributors", BASE_URL, repo))
 	if err != nil {
 		return []ContributerInfo{}
 	}
@@ -189,16 +173,7 @@ func GetRepositoryContributers(repo string) []ContributerInfo {
 
 func GetUserRepositories(userId string) []string {
 	repositoryNames := []string{}
-	res, err := doRequest(fmt.Sprintf("%s/users/%s/repos", BASE_URL, userId))
-	if err != nil || res == nil {
-		return repositoryNames
-	}
-	resBody, err := io.ReadAll(res.Body)
-	if err != nil {
-		return repositoryNames
-	}
-	var repoList []RepositoryOverviewInfo
-	err = json.Unmarshal([]byte(resBody), &repoList)
+	repoList, err := doRequest[[]RepositoryOverviewInfo](fmt.Sprintf("%s/users/%s/repos", BASE_URL, userId))
 	if err != nil {
 		return repositoryNames
 	}
