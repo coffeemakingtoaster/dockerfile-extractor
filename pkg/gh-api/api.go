@@ -133,7 +133,7 @@ func getRepositoryDefaultBranch(repo string) (string, error) {
 func getFileTreeContent(repo, branch string) GitTree {
 	tree, err := doRequest[GitTree](fmt.Sprintf("%s/repos/%s/git/trees/%s?recursive=1", BASE_URL, repo, branch))
 	if err != nil {
-		panic(err)
+		log.Warn().Err(err).Msg("Fetching failed! Continuing anyway")
 	}
 	return tree
 }
